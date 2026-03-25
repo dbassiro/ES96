@@ -1,0 +1,76 @@
+import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { useMock } from '../lib/supabase'
+
+export default function Login() {
+  const { login, loginError, loading } = useAuth()
+  const [huid, setHuid] = useState('')
+  const [pin, setPin] = useState('')
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    await login(huid, pin)
+    // On success, App.jsx will detect user is set and render the main layout
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="bg-white rounded-2xl shadow-lg w-full max-w-sm p-8">
+
+        {/* Logo / title */}
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-bold text-gray-900">ES96 Admin</h1>
+          <p className="text-sm text-gray-500 mt-1">Supply Management Portal</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* HUID field */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">HUID</label>
+            <input
+              type="text"
+              required
+              value={huid}
+              onChange={e => setHuid(e.target.value)}
+              placeholder="Enter your HUID"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
+          {/* PIN field */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">PIN</label>
+            <input
+              type="password"
+              required
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              placeholder="Enter your PIN"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
+          {/* Error message from AuthContext */}
+          {loginError && (
+            <p className="text-red-500 text-xs">{loginError}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm transition-colors disabled:opacity-50 mt-2"
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        {/* Hint shown only in mock mode so devs know the test credentials */}
+        {useMock && (
+          <p className="text-center text-xs text-gray-400 mt-6">
+            Mock mode — HUID: <span className="font-mono">admin001</span> / PIN: <span className="font-mono">1234</span>
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
