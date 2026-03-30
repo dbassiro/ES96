@@ -4,12 +4,12 @@ import { useMock } from '../lib/supabase'
 
 export default function Login() {
   const { login, loginError, loading } = useAuth()
-  const [huid, setHuid] = useState('')
-  const [pin, setPin] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   async function handleSubmit(e) {
     e.preventDefault()
-    await login(huid, pin)
+    await login(email, password)
     // On success, App.jsx will detect user is set and render the main layout
   }
 
@@ -26,26 +26,26 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* HUID field */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">HUID</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
             <input
-              type="text"
+              type="email"
               required
-              value={huid}
-              onChange={e => setHuid(e.target.value)}
-              placeholder="Enter your HUID"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Enter your email"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
 
-          {/* PIN field */}
+          {/* Password field */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">PIN</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
             <input
               type="password"
               required
-              value={pin}
-              onChange={e => setPin(e.target.value)}
-              placeholder="Enter your PIN"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Enter your password"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
@@ -67,7 +67,7 @@ export default function Login() {
         {/* Hint shown only in mock mode so devs know the test credentials */}
         {useMock && (
           <p className="text-center text-xs text-gray-400 mt-6">
-            Mock mode — HUID: <span className="font-mono">admin001</span> / PIN: <span className="font-mono">1234</span>
+            Mock mode — Email: <span className="font-mono">admin@es96.com</span> / Password: <span className="font-mono">admin123</span>
           </p>
         )}
       </div>

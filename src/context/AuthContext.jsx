@@ -1,6 +1,6 @@
 import { createContext, useContext, useState } from 'react'
 import { supabase, useMock } from '../lib/supabase'
-import { mockUsers } from '../lib/mockData'
+import { mockUsers, mockPasswords } from '../lib/mockData'
 
 const AuthContext = createContext(null)
 
@@ -14,16 +14,16 @@ export function AuthProvider({ children }) {
   const [loginError, setLoginError] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  // Looks up the HUID + PIN against the users table and checks is_admin.
+  // Authenticates via email + password, then verifies the user has role = 'admin'.
   // Returns true on success, false on failure.
-  async function login(huid, pin) {
+  async function login(email, password) {
     setLoading(true)
     setLoginError(null)
 
     if (useMock) {
-      // Find the user in mock data — match on huid, pin, and is_admin
+      // Find the user in mock data — match on email, password, and admin role
       const found = mockUsers.find(
-        u => u.huid === huid && u.pin === pin && u.is_admin
+        u => u.email === email && mockPasswords[u.email] === password && u.role === 'admin'
       )
       setLoading(false)
       if (!found) {
@@ -35,31 +35,40 @@ export function AuthProvider({ children }) {
       return true
     }
 
-    // Query Supabase — match on huid and pin, check is_admin flag
-    const { data, error } = await supabase
+    // Step 1: authenticate with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError || !authData.user) {
+      setLoading(false)
+      setLoginError('Invalid credentials.')
+      return false
+    }
+
+    // Step 2: check the users table to confirm this account has admin role
+    const { data: profile, error: profileError } = await supabase
       .from('users')
-      .select('huid, billing_node, is_admin')
-      .eq('huid', huid)
-      .eq('pin', pin)
+      .select('id, name, email, role, department')
+      .eq('id', authData.user.id)
       .single()
 
     setLoading(false)
 
-    if (error || !data) {
-      setLoginError('Invalid credentials.')
+    if (profileError || !profile) {
+      setLoginError('Could not load user profile.')
       return false
     }
-    if (!data.is_admin) {
+    if (profile.role !== 'admin') {
       setLoginError('This account does not have admin access.')
       return false
     }
 
-    setUser(data)
-    localStorage.setItem('es96_admin_user', JSON.stringify(data))
+    setUser(profile)
+    localStorage.setItem('es96_admin_user', JSON.stringify(profile))
     return true
   }
 
-  function logout() {
+  async function logout() {
+    if (!useMock) await supabase.auth.signOut()
     setUser(null)
     localStorage.removeItem('es96_admin_user')
   }

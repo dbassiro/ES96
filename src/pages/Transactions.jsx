@@ -2,114 +2,89 @@ import { useEffect, useState } from 'react'
 import { supabase, useMock } from '../lib/supabase'
 import { mockTransactions } from '../lib/mockData'
 
-// Available sort options shown in the dropdown
 const SORT_OPTIONS = [
-  { value: 'start_date_desc', label: 'Date (Newest)' },
-  { value: 'start_date_asc', label: 'Date (Oldest)' },
+  { value: 'created_at_desc', label: 'Date (Newest)' },
+  { value: 'created_at_asc',  label: 'Date (Oldest)' },
 ]
 
-// Converts a raw UTC timestamp string into a readable local date/time.
-// Returns a dash if the timestamp is null (e.g. session still open).
 function formatDate(ts) {
   if (!ts) return '—'
   return new Date(ts).toLocaleString()
 }
 
 export default function Transactions() {
-  // Full list of transactions returned from the last fetch
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   // Active filter values — empty string means no filter applied
-  const [filterHUID, setFilterHUID] = useState('')
-  const [filterLab, setFilterLab] = useState('')
-  const [filterItem, setFilterItem] = useState('')
-  // Sort state — changing this triggers a re-fetch so the DB does the ordering
-  const [sort, setSort] = useState('start_date_desc')
+  const [filterUser, setFilterUser]         = useState('')
+  const [filterStockroom, setFilterStockroom] = useState('')
+  const [filterType, setFilterType]         = useState('')
+  const [sort, setSort]                     = useState('created_at_desc')
 
-  // Options for the Lab and Item filter dropdowns, derived from the fetched data
-  const [labs, setLabs] = useState([])
-  const [itemNames, setItemNames] = useState([])
+  // Options for filter dropdowns, derived from fetched data
+  const [userNames, setUserNames]       = useState([])
+  const [stockroomNames, setStockroomNames] = useState([])
 
-  // Re-fetch whenever the sort order changes
+  // Re-fetch whenever sort changes
   useEffect(() => {
     fetchTransactions()
   }, [sort])
 
-  // Fetches transactions with their related stockroom and items.
-  // In mock mode, sorts the local placeholder data instead of hitting the DB.
   async function fetchTransactions() {
     setLoading(true)
     setError(null)
 
     if (useMock) {
-      // Sort mock data in the browser to mirror what Supabase would return
       const sorted = [...mockTransactions].sort((a, b) => {
-        const dir = sort === 'start_date_desc' ? -1 : 1
-        return dir * (new Date(a.start_date) - new Date(b.start_date))
+        const dir = sort === 'created_at_desc' ? -1 : 1
+        return dir * (new Date(a.created_at) - new Date(b.created_at))
       })
       setTransactions(sorted)
-      // Derive filter dropdown options from the mock data
-      setLabs([...new Set(sorted.map(t => t.stockrooms?.name).filter(Boolean))].sort())
-      setItemNames([...new Set(sorted.flatMap(t => t.transaction_items.map(ti => ti.items?.name)).filter(Boolean))].sort())
+      setUserNames([...new Set(sorted.map(t => t.users?.name).filter(Boolean))].sort())
+      setStockroomNames([...new Set(sorted.map(t => t.stockrooms?.name).filter(Boolean))].sort())
       setLoading(false)
       return
     }
 
-    const isDesc = sort === 'start_date_desc'
-    // Nested select: fetch transaction + joined stockroom name + all items in that transaction
+    const isDesc = sort === 'created_at_desc'
+    // Each transaction row directly references one item, one user, and one stockroom
     const { data, error } = await supabase
       .from('transactions')
       .select(`
         id,
-        start_date,
-        end_date,
-        charging,
-        employee_huid,
-        stockrooms ( name ),
-        transaction_items (
-          quantity,
-          items ( name )
-        )
+        type,
+        quantity,
+        notes,
+        created_at,
+        items      ( name ),
+        users      ( name, email ),
+        stockrooms ( name )
       `)
-      // Sort is done at the DB level so results arrive pre-ordered
-      .order('start_date', { ascending: !isDesc })
+      .order('created_at', { ascending: !isDesc })
 
     if (error) { setError(error.message); setLoading(false); return }
 
     setTransactions(data ?? [])
-
-    // Build filter dropdown options from the returned data
-    setLabs([...new Set((data ?? []).map(t => t.stockrooms?.name).filter(Boolean))].sort())
-    const names = (data ?? []).flatMap(t =>
-      (t.transaction_items ?? []).map(ti => ti.items?.name).filter(Boolean)
-    )
-    setItemNames([...new Set(names)].sort())
-
+    setUserNames([...new Set((data ?? []).map(t => t.users?.name).filter(Boolean))].sort())
+    setStockroomNames([...new Set((data ?? []).map(t => t.stockrooms?.name).filter(Boolean))].sort())
     setLoading(false)
   }
 
-  // Apply active filters client-side against the already-fetched data
+  // Apply active filters client-side
   const filtered = transactions.filter(t => {
-    // HUID filter is a partial text match so you can type part of an ID
-    if (filterHUID && !(t.employee_huid ?? '').toLowerCase().includes(filterHUID.toLowerCase())) return false
-    // Lab filter is an exact match from the dropdown
-    if (filterLab && t.stockrooms?.name !== filterLab) return false
-    // Item filter — true only if this transaction includes the selected item
-    if (filterItem) {
-      const hasItem = (t.transaction_items ?? []).some(ti => ti.items?.name === filterItem)
-      if (!hasItem) return false
-    }
+    if (filterUser      && t.users?.name !== filterUser)           return false
+    if (filterStockroom && t.stockrooms?.name !== filterStockroom) return false
+    if (filterType      && t.type !== filterType)                  return false
     return true
   })
 
-  // True when any filter is active — used to show/hide the Clear button
-  const hasFilters = filterHUID || filterLab || filterItem
+  const hasFilters = filterUser || filterStockroom || filterType
 
   return (
     <div>
-      {/* Page header with title and live record count */}
+      {/* Page header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Transactions</h2>
         <span className="text-sm text-gray-400">{filtered.length} record{filtered.length !== 1 ? 's' : ''}</span>
@@ -117,33 +92,35 @@ export default function Transactions() {
 
       {/* Filter and sort controls */}
       <div className="flex flex-wrap gap-3 mb-5">
-        {/* HUID text input — partial match search */}
-        <input
-          type="text"
-          placeholder="Filter by HUID..."
-          value={filterHUID}
-          onChange={e => setFilterHUID(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 w-48"
-        />
-        {/* Lab dropdown — populated from data returned by the last fetch */}
+        {/* User dropdown */}
         <select
-          value={filterLab}
-          onChange={e => setFilterLab(e.target.value)}
+          value={filterUser}
+          onChange={e => setFilterUser(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
-          <option value="">All Labs</option>
-          {labs.map(l => <option key={l} value={l}>{l}</option>)}
+          <option value="">All Users</option>
+          {userNames.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
-        {/* Item dropdown — populated from all items seen across all transactions */}
+        {/* Stockroom dropdown */}
         <select
-          value={filterItem}
-          onChange={e => setFilterItem(e.target.value)}
+          value={filterStockroom}
+          onChange={e => setFilterStockroom(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
-          <option value="">All Items</option>
-          {itemNames.map(n => <option key={n} value={n}>{n}</option>)}
+          <option value="">All Stockrooms</option>
+          {stockroomNames.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        {/* Sort dropdown — changing this triggers a re-fetch via the useEffect dependency */}
+        {/* Type dropdown */}
+        <select
+          value={filterType}
+          onChange={e => setFilterType(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+        >
+          <option value="">All Types</option>
+          <option value="checkout">Checkout</option>
+          <option value="return">Return</option>
+        </select>
+        {/* Sort */}
         <select
           value={sort}
           onChange={e => setSort(e.target.value)}
@@ -151,10 +128,9 @@ export default function Transactions() {
         >
           {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {/* Only render Clear button when at least one filter is active */}
         {hasFilters && (
           <button
-            onClick={() => { setFilterHUID(''); setFilterLab(''); setFilterItem('') }}
+            onClick={() => { setFilterUser(''); setFilterStockroom(''); setFilterType('') }}
             className="text-sm text-gray-500 hover:text-gray-700 underline"
           >
             Clear filters
@@ -162,7 +138,6 @@ export default function Transactions() {
         )}
       </div>
 
-      {/* Inline error if the Supabase fetch failed */}
       {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
 
       {loading ? (
@@ -172,45 +147,31 @@ export default function Transactions() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['HUID', 'Lab / Stockroom', 'Items Checked Out', 'Start', 'End', 'Charging'].map(h => (
+                {['Date', 'User', 'Stockroom', 'Item', 'Qty', 'Type', 'Notes'].map(h => (
                   <th key={h} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No transactions found</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No transactions found</td></tr>
               ) : filtered.map(t => (
                 <tr key={t.id} className="hover:bg-gray-50">
-                  {/* HUID in monospace so digit widths are consistent */}
-                  <td className="px-4 py-3 font-mono text-gray-700">{t.employee_huid ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(t.created_at)}</td>
+                  <td className="px-4 py-3 text-gray-700">{t.users?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{t.stockrooms?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-700">{t.items?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{t.quantity ?? '—'}</td>
                   <td className="px-4 py-3">
-                    {/* List each item taken during this session with its quantity */}
-                    {(t.transaction_items ?? []).length === 0 ? (
-                      <span className="text-gray-400">—</span>
+                    {t.type === 'checkout' ? (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">Checkout</span>
+                    ) : t.type === 'return' ? (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Return</span>
                     ) : (
-                      <div className="space-y-0.5">
-                        {t.transaction_items.map((ti, i) => (
-                          <div key={i} className="text-gray-700">
-                            {ti.items?.name ?? '?'}
-                            {ti.quantity != null && <span className="text-gray-400 ml-1">×{ti.quantity}</span>}
-                          </div>
-                        ))}
-                      </div>
+                      <span className="text-gray-400">—</span>
                     )}
                   </td>
-                  {/* formatDate handles null end_date (open session) gracefully */}
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(t.start_date)}</td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{formatDate(t.end_date)}</td>
-                  <td className="px-4 py-3">
-                    {/* Yellow badge = being charged to monthly tab; gray = free session */}
-                    {t.charging != null ? (
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${t.charging ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {t.charging ? 'Yes' : 'No'}
-                      </span>
-                    ) : '—'}
-                  </td>
+                  <td className="px-4 py-3 text-gray-400 max-w-xs truncate">{t.notes ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

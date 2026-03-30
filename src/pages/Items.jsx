@@ -5,24 +5,22 @@ import { mockItems, mockInventory } from '../lib/mockData'
 // Default blank state for the Add Item form
 const EMPTY_FORM = {
   name: '',
-  part_number: '',
-  supplier: '',
-  cost: '',
-  desired_amount: '',
-  low_stock_amount: '',
+  code: '',
+  category: '',
+  description: '',
 }
 
 export default function Items() {
   // Full list of items from the database
   const [items, setItems] = useState([])
-  // All inventory rows (item + stockroom + quantity)
+  // All inventory rows (item + stockroom + quantity + min_quantity)
   const [inventory, setInventory] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   // Active filter values — empty string means "no filter applied"
   const [filterStockroom, setFilterStockroom] = useState('')
-  const [filterSupplier, setFilterSupplier] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
 
   // Modal visibility and form state for adding a new item
   const [showModal, setShowModal] = useState(false)
@@ -57,25 +55,27 @@ export default function Items() {
     setLoading(false)
   }
 
-  // Build a lookup: { item_id: [{ stockroom, amount }, ...] }
+  // Build a lookup: { item_id: [{ stockroom, quantity, min_quantity }, ...] }
   // This lets each table row instantly find its stock counts without re-scanning the array
   const inventoryByItem = inventory.reduce((acc, row) => {
     if (!acc[row.item_id]) acc[row.item_id] = []
-    acc[row.item_id].push({ stockroom: row.stockrooms?.name ?? '—', amount: row.curr_amount })
+    acc[row.item_id].push({
+      stockroom: row.stockrooms?.name ?? '—',
+      quantity: row.quantity,
+      min_quantity: row.min_quantity,
+    })
     return acc
   }, {})
 
-  // Derive unique supplier names from the loaded items for the filter dropdown
-  const suppliers = [...new Set(items.map(i => i.supplier).filter(Boolean))].sort()
+  // Derive unique category names from the loaded items for the filter dropdown
+  const categories = [...new Set(items.map(i => i.category).filter(Boolean))].sort()
 
   // Derive unique stockroom names from inventory rows for the filter dropdown
   const stockroomNames = [...new Set(inventory.map(r => r.stockrooms?.name).filter(Boolean))].sort()
 
   // Apply active filters client-side — no extra network request needed
   const filtered = items.filter(item => {
-    // Skip items not from the selected supplier
-    if (filterSupplier && item.supplier !== filterSupplier) return false
-    // Skip items not present in the selected stockroom
+    if (filterCategory && item.category !== filterCategory) return false
     if (filterStockroom) {
       const inv = inventoryByItem[item.id] ?? []
       if (!inv.some(r => r.stockroom === filterStockroom)) return false
@@ -91,11 +91,9 @@ export default function Items() {
     setSaving(true)
     const { error } = await supabase.from('items').insert({
       name: form.name,
-      part_number: form.part_number || null,
-      supplier: form.supplier || null,
-      cost: form.cost ? parseFloat(form.cost) : null,
-      desired_amount: form.desired_amount ? parseInt(form.desired_amount) : null,
-      low_stock_amount: form.low_stock_amount ? parseInt(form.low_stock_amount) : null,
+      code: form.code || null,
+      category: form.category || null,
+      description: form.description || null,
     })
     setSaving(false)
     if (error) { setFormError(error.message); return }
@@ -118,7 +116,7 @@ export default function Items() {
         </button>
       </div>
 
-      {/* Filter bar — dropdowns update state, which re-runs the filtered array above */}
+      {/* Filter bar */}
       <div className="flex gap-4 mb-5">
         <select
           value={filterStockroom}
@@ -129,17 +127,16 @@ export default function Items() {
           {stockroomNames.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
         <select
-          value={filterSupplier}
-          onChange={e => setFilterSupplier(e.target.value)}
+          value={filterCategory}
+          onChange={e => setFilterCategory(e.target.value)}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
-          <option value="">All Suppliers</option>
-          {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        {/* Only show Clear button when at least one filter is active */}
-        {(filterStockroom || filterSupplier) && (
+        {(filterStockroom || filterCategory) && (
           <button
-            onClick={() => { setFilterStockroom(''); setFilterSupplier('') }}
+            onClick={() => { setFilterStockroom(''); setFilterCategory('') }}
             className="text-sm text-gray-500 hover:text-gray-700 underline"
           >
             Clear
@@ -150,7 +147,6 @@ export default function Items() {
       {/* Inline error message if the Supabase fetch failed */}
       {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
 
-      {/* Show spinner while loading, then render table */}
       {loading ? (
         <p className="text-gray-500 text-sm">Loading...</p>
       ) : (
@@ -158,42 +154,38 @@ export default function Items() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Name', 'Part #', 'Supplier', 'Cost', 'Desired Amt', 'Low Stock', 'Inventory'].map(h => (
+                {['Name', 'Code', 'Category', 'Description', 'Inventory'].map(h => (
                   <th key={h} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No items found</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No items found</td></tr>
               ) : filtered.map(item => {
-                // Look up all inventory rows for this item across all stockrooms
                 const inv = inventoryByItem[item.id] ?? []
-                // Sum stock across all stockrooms to check against the low-stock threshold
-                const totalStock = inv.reduce((s, r) => s + (r.amount ?? 0), 0)
-                // Flag the row if total stock is at or below the low_stock_amount threshold
-                const isLow = item.low_stock_amount != null && totalStock <= item.low_stock_amount
                 return (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
-                    <td className="px-4 py-3 text-gray-500">{item.part_number ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{item.supplier ?? '—'}</td>
-                    {/* Format cost as a dollar amount; show dash if not set */}
-                    <td className="px-4 py-3 text-gray-600">{item.cost != null ? `$${Number(item.cost).toFixed(2)}` : '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{item.desired_amount ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{item.low_stock_amount ?? '—'}</td>
+                    <td className="px-4 py-3 font-mono text-gray-500 text-xs">{item.code ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600">{item.category ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 max-w-xs truncate">{item.description ?? '—'}</td>
                     <td className="px-4 py-3">
                       {inv.length === 0 ? (
                         <span className="text-gray-400">—</span>
                       ) : (
-                        // Show one line per stockroom with the quantity; red if low stock
+                        // Show one line per stockroom; red if quantity is at or below min_quantity
                         <div className="space-y-0.5">
-                          {inv.map((r, i) => (
-                            <div key={i} className="flex items-center gap-1.5">
-                              <span className={`font-semibold ${isLow ? 'text-red-600' : 'text-green-700'}`}>{r.amount}</span>
-                              <span className="text-gray-400 text-xs">in {r.stockroom}</span>
-                            </div>
-                          ))}
+                          {inv.map((r, i) => {
+                            const isLow = r.min_quantity != null && r.quantity <= r.min_quantity
+                            return (
+                              <div key={i} className="flex items-center gap-1.5">
+                                <span className={`font-semibold ${isLow ? 'text-red-600' : 'text-green-700'}`}>{r.quantity}</span>
+                                <span className="text-gray-400 text-xs">in {r.stockroom}</span>
+                                {isLow && <span className="text-xs text-red-400">(low)</span>}
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </td>
@@ -205,37 +197,31 @@ export default function Items() {
         </div>
       )}
 
-      {/* Add Item Modal — rendered as a full-screen overlay when showModal is true */}
+      {/* Add Item Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Add New Item</h3>
             <form onSubmit={handleAddItem} className="space-y-3">
-              {/* Render each field from a config array to avoid repeating input markup */}
               {[
-                { key: 'name', label: 'Name', required: true },
-                { key: 'part_number', label: 'Part Number' },
-                { key: 'supplier', label: 'Supplier' },
-                { key: 'cost', label: 'Cost ($)', type: 'number' },
-                { key: 'desired_amount', label: 'Desired Amount', type: 'number' },
-                { key: 'low_stock_amount', label: 'Low Stock Threshold', type: 'number' },
-              ].map(({ key, label, required, type }) => (
+                { key: 'name',        label: 'Name',        required: true },
+                { key: 'code',        label: 'Code' },
+                { key: 'category',    label: 'Category' },
+                { key: 'description', label: 'Description' },
+              ].map(({ key, label, required }) => (
                 <div key={key}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && ' *'}</label>
                   <input
-                    type={type ?? 'text'}
+                    type="text"
                     required={required}
                     value={form[key]}
-                    // Spread update: only change the field that was typed into
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   />
                 </div>
               ))}
-              {/* Show Supabase error inline if the insert fails */}
               {formError && <p className="text-red-500 text-xs">{formError}</p>}
               <div className="flex justify-end gap-3 pt-2">
-                {/* Cancel resets form and closes modal without saving */}
                 <button
                   type="button"
                   onClick={() => { setShowModal(false); setForm(EMPTY_FORM); setFormError(null) }}
@@ -243,7 +229,6 @@ export default function Items() {
                 >
                   Cancel
                 </button>
-                {/* Disabled and shows "Saving..." while the Supabase insert is in flight */}
                 <button
                   type="submit"
                   disabled={saving}
