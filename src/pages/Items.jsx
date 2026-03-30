@@ -7,7 +7,8 @@ const EMPTY_FORM = {
   name: '',
   code: '',
   category: '',
-  description: '',
+  description: '', 
+  price: ''
 }
 
 export default function Items() {
@@ -94,6 +95,7 @@ export default function Items() {
       code: form.code || null,
       category: form.category || null,
       description: form.description || null,
+      price: form.price !== '' ? parseFloat(form.price) : null
     })
     setSaving(false)
     if (error) { setFormError(error.message); return }
@@ -154,14 +156,14 @@ export default function Items() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {['Name', 'Code', 'Category', 'Description', 'Inventory'].map(h => (
+                {['Name', 'Code', 'Category', 'Price','Description', 'Inventory'].map(h => (
                   <th key={h} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No items found</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No items found</td></tr>
               ) : filtered.map(item => {
                 const inv = inventoryByItem[item.id] ?? []
                 return (
@@ -169,6 +171,8 @@ export default function Items() {
                     <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
                     <td className="px-4 py-3 font-mono text-gray-500 text-xs">{item.code ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{item.category ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-700">
+                    {item.price != null ? `$${parseFloat(item.price).toFixed(2)}` : '—'}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-xs truncate">{item.description ?? '—'}</td>
                     <td className="px-4 py-3">
                       {inv.length === 0 ? (
@@ -208,16 +212,19 @@ export default function Items() {
                 { key: 'code',        label: 'Code' },
                 { key: 'category',    label: 'Category' },
                 { key: 'description', label: 'Description' },
-              ].map(({ key, label, required }) => (
+                { key: 'price', label: 'Price ($)', required: false, type: 'number' },
+              ].map(({ key, label, required,type }) => (
                 <div key={key}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{label}{required && ' *'}</label>
                   <input
-                    type="text"
+                    type={type ?? 'text'}
+                   step={type === 'number' ? '0.01' : undefined}
+                   min={type === 'number' ? '0' : undefined}
                     required={required}
                     value={form[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
+                   onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                   />
                 </div>
               ))}
               {formError && <p className="text-red-500 text-xs">{formError}</p>}

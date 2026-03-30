@@ -17,19 +17,18 @@ export const mockPasswords = {
 
 // Two example stockrooms
 export const mockStockrooms = [
-  { id: 's1', name: 'Lab A', location: 'Pierce Hall 110', description: 'Main electronics lab', capacity: 500, manager: 'Admin User', is_active: true },
-  { id: 's2', name: 'Lab B', location: 'Pierce Hall 210', description: 'Secondary lab',       capacity: 300, manager: 'Admin User', is_active: true },
+  { id: 's1', name: 'Room A', location: 'Wyss First Floor', description: 'Yo motha', capacity: 500, manager: 'Admin User', is_active: true },
+  { id: 's2', name: 'Room B', location: 'Wyss Second Floor', description: 'Yo Motha 2',       capacity: 300, manager: 'Admin User', is_active: true },
 ]
 
 // Catalog of supply items — no pricing or stock thresholds (those live in inventory now)
 export const mockItems = [
-  { id: 'i1', name: 'Resistor 10k',    code: 'RES-10K',  category: 'Passive',   description: '10kΩ through-hole resistor' },
-  { id: 'i2', name: 'Capacitor 100uF', code: 'CAP-100U', category: 'Passive',   description: '100µF electrolytic capacitor' },
-  { id: 'i3', name: 'Arduino Uno',     code: 'ARD-UNO',  category: 'MCU',       description: 'Arduino Uno R3 development board' },
-  { id: 'i4', name: 'Breadboard',      code: 'BB-400',   category: 'Prototyping', description: '400-point solderless breadboard' },
-  { id: 'i5', name: 'Jumper Wires',    code: 'JW-M2M',   category: 'Prototyping', description: 'Male-to-male jumper wire set' },
-]
-
+  { id: 'i1', name: 'Resistor 10k',    code: 'RES-10K',  category: 'Passive',     price: 0.10, description: '10kΩ through-hole resistor' },
+  { id: 'i2', name: 'Capacitor 100uF', code: 'CAP-100U', category: 'Passive',     price: 0.25, description: '100µF electrolytic capacitor' },
+  { id: 'i3', name: 'Arduino Uno',     code: 'ARD-UNO',  category: 'MCU',         price: 27.00, description: 'Arduino Uno R3 development board' },
+  { id: 'i4', name: 'Breadboard',      code: 'BB-400',   category: 'Prototyping', price: 5.00, description: '400-point solderless breadboard' },
+  { id: 'i5', name: 'Jumper Wires',    code: 'JW-M2M',   category: 'Prototyping', price: 3.50, description: 'Male-to-male jumper wire set' },
+  ]
 // Per-stockroom inventory rows.
 // quantity = current stock; min_quantity = low-stock threshold.
 // inv3 (Capacitor 100uF, Lab A) is intentionally below min_quantity to demo the red highlight.
