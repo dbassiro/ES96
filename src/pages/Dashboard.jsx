@@ -15,6 +15,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchAll()
+
+    if (!useMock) {
+      const channel = supabase
+        .channel('dashboard-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
+          fetchAll()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+          fetchAll()
+        })
+        .subscribe()
+
+      return () => { supabase.removeChannel(channel) }
+    }
   }, [])
 
   async function fetchAll() {
@@ -51,6 +65,8 @@ export default function Dashboard() {
     setInventory(invRes.data ?? [])
     setTransactions(txRes.data ?? [])
     setLoading(false)
+    console.log('[Dashboard] inventory rows:', invRes.data)
+    console.log('[Dashboard] low stock rows:', (invRes.data ?? []).filter(r => r.min_quantity != null && r.quantity <= r.min_quantity))
   }
 
   const lowStock = inventory.filter(row => row.min_quantity != null && row.quantity <= row.min_quantity)
