@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+.delete-button {
+  background-color: #e53935; /* red */
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #c62828; /* darker red on hover */
+}
