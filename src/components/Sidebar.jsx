@@ -9,6 +9,7 @@ const links = [
   { to: '/', label: 'Dashboard' },
   { to: '/items', label: 'Items' },
   { to: '/transactions', label: 'Transactions' },
+  { to: '/inventory', label: 'Inventory' },
 ]
 
 export default function Sidebar() {
